@@ -12,7 +12,7 @@ class Wechat(object):
 	该工具参考wechat-python-sdk
 	"""
 
-	def __init__(self, token=None, corpid=None, corpsecret=None, access_token=None, access_token_expires_at=None, jsapi_ticket=None:
+	def __init__(self, token=None, corpid=None, corpsecret=None, access_token=None, access_token_expires_at=None, jsapi_ticket=None):
 		self.token = token
 		self.corpid = corpid
 		self.corpsecret = corpsecret
@@ -75,7 +75,7 @@ class Wechat(object):
     	管理组权限验证方法
     	"""
     	access_token = self._check_access_token()
-    	resp = requests.get(urls="https://qyapi.weixin.qq.com/cgi-bin/ticket/get", params={'access_token': access_token, 'type': 'contact'})
+    	resp = requests.get(url="https://qyapi.weixin.qq.com/cgi-bin/ticket/get", params={'access_token': access_token, 'type': 'contact'})
     	return resp.json()
     
     def _check_corpid_corpsecret(self):
@@ -100,6 +100,73 @@ class Wechat(object):
     	获取token, 可能为null
     	"""
     	return _check_access_token()
+
+    def check_member_follow(self, user_id):
+    	"""
+    	成员关注企业号，二次验证
+    	"""
+    	access_token = self._check_access_token()
+    	resp = requests.get(url="https://qyapi.weixin.qq.com/cgi-bin/user/authsucc", params={'access_token': access_token, 'userid': user_id})
+    	return resp.json()
+
+    def _post_department(self, **kwargs):
+    	access_token = self._check_access_token()
+    	resp = requests.post(url="https://qyapi.weixin.qq.com/cgi-bin/department/create?access_token={}".format(access_token), **kwargs)
+    	return resp
+
+    def create_deparment(self, **kwargs):
+    	"""
+    	创建部门
+    	{
+		   "name": "广州研发中心",
+		   "parentid": "1",
+		   "order": "1",
+		   "id": "1"
+		}
+		return :
+		{
+		   "errcode": 0,
+		   "errmsg": "created",
+		   "id": 2
+		}
+    	"""
+    	return self._post_deparment(**kwargs)
+
+    def update_department(self, **kwargs):
+    	"""
+    	更新部门
+    	{
+		   "name": "广州研发中心",
+		   "parentid": "1",
+		   "order": "1",
+		   "id": "1"
+		}
+		return :
+		{
+		   "errcode": 0,
+		   "errmsg": "update",
+		   "id": 2
+		}
+		"""
+    	return self._post_deparment(**kwargs)
+
+
+    def delete_department(self, _id):
+    	"""
+    	删除部门
+    	"""
+    	access_token = self._check_access_token()
+    	resp = requests.get(url='https://qyapi.weixin.qq.com/cgi-bin/department/delete', params={'access_token': access_token, 'id': _id})
+    	return resp.json()
+
+    def get_departments(self, _id):
+    	"""
+    	获取部门列表
+    	params: _id 获取指定部门及其下的子部门
+    	"""
+    	access_token = self._check_access_token()
+    	resp = requests.get(url='https://qyapi.weixin.qq.com/cgi-bin/department/list', params={'access_token': access_token})
+    	return resp.json()
     	
 
 
