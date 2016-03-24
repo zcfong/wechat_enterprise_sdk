@@ -199,7 +199,7 @@ class WechatEnterprise(OfficialWechat):
         :param agent_id: 企业应用的id，整型
         :param to_all: 是否发送给所有人
         :param to_user: 成员ID列表，最多支持1000个
-        :param to_party: 	部门ID列表，最多支持100个
+        :param to_party:    部门ID列表，最多支持100个
         :param to_tag: 标签ID列表
         :param safe: 是否加密
         """
@@ -218,7 +218,7 @@ class WechatEnterprise(OfficialWechat):
         :param agent_id: 企业应用的id，整型
         :param to_all: 是否发送给所有人
         :param to_user: 成员ID列表，最多支持1000个
-        :param to_party: 	部门ID列表，最多支持100个
+        :param to_party:    部门ID列表，最多支持100个
         :param to_tag: 标签ID列表
         :param safe: 是否加密
         """
@@ -234,7 +234,7 @@ class WechatEnterprise(OfficialWechat):
         :param agent_id: 企业应用的id，整型
         :param to_all: 是否发送给所有人
         :param to_user: 成员ID列表，最多支持1000个
-        :param to_party: 	部门ID列表，最多支持100个
+        :param to_party:    部门ID列表，最多支持100个
         :param to_tag: 标签ID列表
         :param safe: 是否加密
         """
@@ -252,7 +252,7 @@ class WechatEnterprise(OfficialWechat):
         :param agent_id: 企业应用的id，整型
         :param to_all: 是否发送给所有人
         :param to_user: 成员ID列表，最多支持1000个
-        :param to_party: 	部门ID列表，最多支持100个
+        :param to_party:    部门ID列表，最多支持100个
         :param to_tag: 标签ID列表
         :param safe: 是否加密
         """
@@ -270,7 +270,7 @@ class WechatEnterprise(OfficialWechat):
         :param agent_id: 企业应用的id，整型
         :param to_all: 是否发送给所有人
         :param to_user: 成员ID列表，最多支持1000个
-        :param to_party: 	部门ID列表，最多支持100个
+        :param to_party:    部门ID列表，最多支持100个
         :param to_tag: 标签ID列表
         :param safe: 是否加密
         """
@@ -285,7 +285,7 @@ class WechatEnterprise(OfficialWechat):
         :param agent_id: 企业应用的id，整型
         :param to_all: 是否发送给所有人
         :param to_user: 成员ID列表，最多支持1000个
-        :param to_party: 	部门ID列表，最多支持100个
+        :param to_party:    部门ID列表，最多支持100个
         :param to_tag: 标签ID列表
         :param safe: 是否加密
         """
@@ -815,6 +815,3 @@ class WechatEnterprise(OfficialWechat):
         access_token = self._check_access_token()
         resp = requests.get(url='https://qyapi.weixin.qq.com/cgi-bin/agent/list', params={'access_token': access_token})
         return resp.json()
-
-
-
