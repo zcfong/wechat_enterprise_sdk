@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-<<<<<<< HEAD
 
 import time
 
@@ -261,5 +260,3 @@ class GroupTransferReply(WechatReply):
         return GroupTransferReply.TEMPLATE.format(**self._args)
 
 
-=======
->>>>>>> bff4e268e9f9b2a35fdddb63a8d58733cfe4d4d4

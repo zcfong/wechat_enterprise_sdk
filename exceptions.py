@@ -17,10 +17,12 @@ class WechatSDKException(WechatException):
         self.message = message
 
     def __str__(self):
-        if six.PY2:
-            return to_binary(self.message)
-        else:
-            return to_text(self.message)
+        return self.message
+
+
+class SignatureError(WechatSDKException):
+    """构造参数提供不全异常"""
+    pass
 
 
 class NeedParamError(WechatSDKException):
@@ -35,6 +37,11 @@ class ParseError(WechatSDKException):
 
 class DecryptError(WechatSDKException):
     """解密异常"""
+    pass
+
+
+class EncryptError(WechatSDKException):
+    """加密异常"""
     pass
 
 

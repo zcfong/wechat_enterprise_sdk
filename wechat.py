@@ -2,10 +2,11 @@
 
 import hashlib
 import requests
+import json
 import cgi
 from .lib.parser import XMLStore
 from .tencent import OfficialWechat
-from .exceptions import ParseError, DecryptError, NeedParseError
+from .exceptions import ParseError, DecryptError, EncryptError, NeedParseError
 from .messages import UnknownMessage, MESSAGE_TYPES
 from .reply import TextReply, ImageReply, VoiceReply, VideoReply, MusicReply, Article, ArticleReply
 from .send import TextSend, ImageSend, VoiceSend, VideoSend, FileSend, Article as Article2, ArticleSend
@@ -18,14 +19,8 @@ class WechatEnterprise(OfficialWechat):
     该工具参考wechat-python-sdk
     """
 
-    def __init__(self, token=None, corpid=None, corpsecret=None, access_token=None, access_token_expires_at=None,
-                 jsapi_ticket=None):
-        self.token = token
-        self.corpid = corpid
-        self.corpsecret = corpsecret
-        self.access_token = access_token
-        self.access_token_expires_at = access_token_expires_at
-        self.jsapi_ticket = jsapi_ticket
+    def __init__(self, *args, **kwargs):
+        super(WechatEnterprise, self).__init__(*args, **kwargs)
         self.__is_parse = False
         self.__content = None
 
@@ -34,9 +29,9 @@ class WechatEnterprise(OfficialWechat):
         获取token , 暂时不做失败处理
         """
         self._check_corpid_corpsecret()
-        resp = requests.get(url="https://qyapi.weixin.qq.com/cgi-bin/gettoken",
-                            params={"corpid": self.corpid, 'corpsecret': self.corpsecret})
-        return resp.json()
+        return requests.get(url="https://qyapi.weixin.qq.com/cgi-bin/gettoken",
+                            params={"corpid": self.corpid, 'corpsecret': self.corpsecret}).json()
+
 
     def grant_jsapi_ticket(self):
         """
@@ -44,9 +39,8 @@ class WechatEnterprise(OfficialWechat):
         """
         self._check_corpid_corpsecret()
         access_token = self._check_access_token()
-        resp = requests.get(url="https://qyapi.weixin.qq.com/cgi-bin/get_jsapi_ticket",
-                            params={'access_token': access_token})
-        return resp.json()
+        return requests.get(url="https://qyapi.weixin.qq.com/cgi-bin/get_jsapi_ticket",
+                            params={'access_token': access_token}).json()
 
     def parse_data(self, data=None, msg_signature=None, timestamp=None, nonce=None):
         """
@@ -79,6 +73,11 @@ class WechatEnterprise(OfficialWechat):
         }
         self.__is_parse = True
 
+    @property
+    def message(self):
+        self._check_parse()
+        return self.__content['message']
+
     def _check_parse(self):
         """
         检查是否成功解析微信服务器传来的数据
@@ -88,7 +87,11 @@ class WechatEnterprise(OfficialWechat):
             raise NeedParseError()
 
     def _encrypt_response(self, response):
-        return self.encrypt_message(response, self.__content['nonce'], self.__content['timestamp'])
+        response = response.encode('utf-8')
+        ok, encrypt_msg = self.encrypt_message(response, self.__content['nonce'], self.__content['timestamp'])
+        if not ok:
+            raise EncryptError()
+        return encrypt_msg
 
     def response_text(self, content, escape=False):
         """
@@ -139,7 +142,8 @@ class WechatEnterprise(OfficialWechat):
         title = self._transcoding(title)
         description = self._transcoding(description)
 
-        response = VideoReply(message=self.__content['message'], media_id=media_id, title=title, description=description).render()
+        response = VideoReply(message=self.__content['message'], media_id=media_id, title=title,
+                              description=description).render()
         return self._encrypt_response(response)
 
     def response_music(self, music_url, title=None, description=None, hq_music_url=None, thumb_media_id=None):
@@ -158,7 +162,8 @@ class WechatEnterprise(OfficialWechat):
         description = self._transcoding(description)
         hq_music_url = self._transcoding(hq_music_url)
 
-        response = MusicReply(message=self.__content['message'], title=title, description=description, music_url=music_url,
+        response = MusicReply(message=self.__content['message'], title=title, description=description,
+                              music_url=music_url,
                               hq_music_url=hq_music_url, thumb_media_id=thumb_media_id).render()
         return self._encrypt_response(response)
 
@@ -187,9 +192,8 @@ class WechatEnterprise(OfficialWechat):
         return self._encrypt_response(response)
 
     def _post_message(self, data):
-        access_token = self._check_access_token()
-        resp = requests.post(url='https://qyapi.weixin.qq.com/cgi-bin/message/send?access_token={}'.format(access_token), json=data)
-        return resp.json()
+        return self._post('https://qyapi.weixin.qq.com/cgi-bin/message/send', data)
+
 
     def send_text(self, content, escape=False, **kwargs):
         """
@@ -314,11 +318,10 @@ class WechatEnterprise(OfficialWechat):
         :param agent_id: 企业应用的id，整型
         :return: 返回的 JSON 数据包
         """
-        menu_data = self._transcoding_dict(menu_data)
-        return self.request.post(
-            url='https://qyapi.weixin.qq.com/cgi-bin/menu/create?access_token={}&agentid={}'.format(self.access_token, agent_id),
-            data=menu_data
-        )
+        return requests.post(
+            url='https://qyapi.weixin.qq.com/cgi-bin/menu/create?access_token={}&agentid={}'.format(self.access_token,
+                                                                                                    agent_id),
+            data=json.dumps(menu_data).decode('unicode-escape').encode("utf-8")).json()
 
     def get_menu(self, agent_id):
         """
@@ -327,7 +330,9 @@ class WechatEnterprise(OfficialWechat):
         :param agent_id: 企业应用的id，整型
         :return: 返回的 JSON 数据包
         """
-        return self.request.get('https://qyapi.weixin.qq.com/cgi-bin/menu/get?access_token={}&agentid={}'.format(self.access_token, agent_id))
+        return requests.get(
+            'https://qyapi.weixin.qq.com/cgi-bin/menu/get?access_token={}&agentid={}'.format(self.access_token,
+                                                                                             agent_id)).json()
 
     def delete_menu(self, agent_id):
         """
@@ -336,7 +341,9 @@ class WechatEnterprise(OfficialWechat):
         :param agent_id: 企业应用的id，整型
         :return: 返回的 JSON 数据包
         """
-        return self.request.get('https://qyapi.weixin.qq.com/cgi-bin/menu/delete?access_token={}&agentid={}'.format(self.access_token, agent_id))
+        return requests.get(
+            'https://qyapi.weixin.qq.com/cgi-bin/menu/delete?access_token={}&agentid={}'.format(self.access_token,
+                                                                                                agent_id)).json()
 
     def generate_jsapi_signature(self, timestamp, noncestr, url, jsapi_ticket=None):
         """
@@ -363,10 +370,16 @@ class WechatEnterprise(OfficialWechat):
         管理组权限验证方法
         """
         access_token = self._check_access_token()
-        resp = requests.get(url="https://qyapi.weixin.qq.com/cgi-bin/ticket/get",
-                            params={'access_token': access_token, 'type': 'contact'})
-        return resp.json()
+        return requests.get(url="https://qyapi.weixin.qq.com/cgi-bin/ticket/get",
+                            params={'access_token': access_token, 'type': 'contact'}).json()
 
+    def _post(self, url, kwargs):
+        """上传处理"""
+        access_token = self._check_access_token()
+
+        _url = "{}?access_token={}".format(url, access_token)
+        resp = requests.post(url=_url, data=json.dumps(kwargs).decode('unicode-escape').encode("utf-8"))
+        return resp.json()
 
     def _check_corpid_corpsecret(self):
         if not self.corpid or not self.corpsecret:
@@ -394,24 +407,16 @@ class WechatEnterprise(OfficialWechat):
         return self._check_access_token()
 
 
-    def check_member_follow(self, user_id):
+    def auth_succ(self, user_id):
         """
         成员关注企业号，二次验证
         """
         access_token = self._check_access_token()
-        resp = requests.get(url="https://qyapi.weixin.qq.com/cgi-bin/user/authsucc",
-                            params={'access_token': access_token, 'userid': user_id})
-        return resp.json()
+        return requests.get(url="https://qyapi.weixin.qq.com/cgi-bin/user/authsucc",
+                            params={'access_token': access_token, 'userid': user_id}).json()
 
 
-    def _post_department(self, **kwargs):
-        access_token = self._check_access_token()
-        resp = requests.post(
-            url="https://qyapi.weixin.qq.com/cgi-bin/department/create?access_token={}".format(access_token), **kwargs)
-        return resp
-
-
-    def create_deparment(self, **kwargs):
+    def create_department(self, **kwargs):
         """
         创建部门
         {
@@ -427,10 +432,7 @@ class WechatEnterprise(OfficialWechat):
            "id": 2
         }
         """
-        access_token = self._check_access_token()
-        resp = requests.post(
-            url="https://qyapi.weixin.qq.com/cgi-bin/department/create?access_token={}".format(access_token), **kwargs)
-        return resp
+        return self._post("https://qyapi.weixin.qq.com/cgi-bin/department/create", kwargs)
 
 
     def update_department(self, **kwargs):
@@ -449,10 +451,7 @@ class WechatEnterprise(OfficialWechat):
            "id": 2
         }
         """
-        access_token = self._check_access_token()
-        resp = requests.post(
-            url="https://qyapi.weixin.qq.com/cgi-bin/department/update?access_token={}".format(access_token), **kwargs)
-        return resp
+        return self._post("https://qyapi.weixin.qq.com/cgi-bin/department/update", kwargs)
 
 
     def delete_department(self, _id):
@@ -460,9 +459,8 @@ class WechatEnterprise(OfficialWechat):
         删除部门
         """
         access_token = self._check_access_token()
-        resp = requests.get(url='https://qyapi.weixin.qq.com/cgi-bin/department/delete',
-                            params={'access_token': access_token, 'id': _id})
-        return resp.json()
+        return requests.get(url='https://qyapi.weixin.qq.com/cgi-bin/department/delete',
+                            params={'access_token': access_token, 'id': _id}).json()
 
 
     def get_departments(self, _id):
@@ -471,21 +469,8 @@ class WechatEnterprise(OfficialWechat):
         params: _id 获取指定部门及其下的子部门
         """
         access_token = self._check_access_token()
-        resp = requests.get(url='https://qyapi.weixin.qq.com/cgi-bin/department/list',
-                            params={'access_token': access_token})
-        return resp.json()
-
-
-    def _post_user(self, method, **kwargs):
-        access_token = self._check_access_token()
-        if 'create' == method:
-            resp = requests.post(url='https://qyapi.weixin.qq.com/cgi-bin/user/create?access_token={}'.format(access_token),
-                                 **kwargs)
-        else:
-            resp = requests.post(url='https://qyapi.weixin.qq.com/cgi-bin/user/update?access_token={}'.format(access_token),
-                                 **kwargs)
-        return resp.json()
-
+        return requests.get(url='https://qyapi.weixin.qq.com/cgi-bin/department/list',
+                            params={'access_token': access_token}).json()
 
     def create_user(self, **kwargs):
         """
@@ -503,7 +488,7 @@ class WechatEnterprise(OfficialWechat):
            "extattr": {"attrs":[{"name":"爱好","value":"旅游"},{"name":"卡号","value":"1234567234"}]}
         }
         """
-        return self._post_user('create', **kwargs)
+        return self._post('https://qyapi.weixin.qq.com/cgi-bin/user/create', kwargs)
 
 
     def update_user(self, **kwargs):
@@ -522,7 +507,7 @@ class WechatEnterprise(OfficialWechat):
            "extattr": {"attrs":[{"name":"爱好","value":"旅游"},{"name":"卡号","value":"1234567234"}]}
         }
         """
-        return self._post_user('update', **kwargs)
+        return self._post('https://qyapi.weixin.qq.com/cgi-bin/user/update', kwargs)
 
 
     def delete_user(self, user_id):
@@ -530,9 +515,8 @@ class WechatEnterprise(OfficialWechat):
         删除成员
         """
         access_token = self._check_access_token()
-        resp = requests.get(url='https://qyapi.weixin.qq.com/cgi-bin/user/delete',
-                            params={'access_token': access_token, 'userid': user_id})
-        return resp.json()
+        return requests.get(url='https://qyapi.weixin.qq.com/cgi-bin/user/delete',
+                            params={'access_token': access_token, 'userid': user_id}).json()
 
 
     def delete_users(self, user_ids):
@@ -541,10 +525,9 @@ class WechatEnterprise(OfficialWechat):
         user_ids = ['a', 'b']
         """
         access_token = self._check_access_token()
-        resp = requests.post(
+        return requests.post(
             url='https://qyapi.weixin.qq.com/cgi-bin/user/batchdelete?access_token={}'.format(access_token),
-            params={'useridlist': user_ids})
-        return resp.json()
+            json={'useridlist': user_ids}).json()
 
 
     def get_user(self, user_id):
@@ -552,9 +535,8 @@ class WechatEnterprise(OfficialWechat):
         获取成员
         """
         access_token = self._check_access_token()
-        resp = requests.get(url='https://qyapi.weixin.qq.com/cgi-bin/user/get',
-                            params={'access_token': access_token, 'userid': user_id})
-        return resp.json()
+        return requests.get(url='https://qyapi.weixin.qq.com/cgi-bin/user/get',
+                            params={'access_token': access_token, 'userid': user_id}).json()
 
 
     def get_simple_user(self, **kwargs):
@@ -565,8 +547,10 @@ class WechatEnterprise(OfficialWechat):
         status 0获取全部成员，1获取已关注成员列表，2获取禁用成员列表，4获取未关注成员列表。status可叠加，未填写则默认为4
         """
         access_token = self._check_access_token()
-        resp = requests.get(url='https://qyapi.weixin.qq.com/cgi-bin/user/get', **kwargs)
-        return resp.json()
+        return requests.get(
+            url='https://qyapi.weixin.qq.com/cgi-bin/user/simplelist?access_token={}'.format(access_token),
+            params=kwargs).json()
+
 
     def get_user_list(self, **kwargs):
         """
@@ -575,18 +559,17 @@ class WechatEnterprise(OfficialWechat):
         status 0获取全部成员，1获取已关注成员列表，2获取禁用成员列表，4获取未关注成员列表。status可叠加，未填写则默认为4
         """
         access_token = self._check_access_token()
-        resp = requests.get(url='https://qyapi.weixin.qq.com/cgi-bin/user/list', **kwargs)
-        return resp.json()
+        return requests.get(url='https://qyapi.weixin.qq.com/cgi-bin/user/list?access_token={}'.format(access_token),
+                            data=kwargs).json()
 
-    def invitation_user(self, user_id):
+
+    def invite_user(self, user_id):
         """
         邀请成员关注
         """
-        access_token = self._check_access_token()
-        resp = requests.post(url='https://qyapi.weixin.qq.com/cgi-bin/invite/send?access_token={}'.format(access_token),
-                             params={'userid': user_id})
+        data = {'userid': user_id}
+        return self._post('https://qyapi.weixin.qq.com/cgi-bin/invite/send', data)
 
-        return resp.json()
 
     def create_tag(self, **kwargs):
         """
@@ -596,10 +579,8 @@ class WechatEnterprise(OfficialWechat):
            "tagid": id
         }
         """
-        access_token = self._check_access_token()
-        resp = requests.post(url='https://qyapi.weixin.qq.com/cgi-bin/tag/create?access_token={}'.format(access_token),
-                             **kwargs)
-        return resp.json()
+        return self._post('https://qyapi.weixin.qq.com/cgi-bin/tag/create', kwargs)
+
 
     def update_tag(self, **kwargs):
         """
@@ -609,28 +590,25 @@ class WechatEnterprise(OfficialWechat):
            "tagid": id
         }
         """
-        access_token = self._check_access_token()
-        resp = requests.post(url='https://qyapi.weixin.qq.com/cgi-bin/tag/update?access_token={}'.format(access_token),
-                             **kwargs)
-        return resp.json()
+        return self._post('https://qyapi.weixin.qq.com/cgi-bin/tag/update', kwargs)
+
 
     def delete_tag(self, tag_id):
         """
         删除标签
         """
         access_token = self._check_access_token()
-        resp = requests.get(url='https://qyapi.weixin.qq.com/cgi-bin/tag/delete',
-                            params={'access_token': access_token, 'tagid': tag_id})
-        return resp.json()
+        return requests.get(url='https://qyapi.weixin.qq.com/cgi-bin/tag/delete',
+                            params={'access_token': access_token, 'tagid': tag_id}).json()
 
     def get_tag(self, tag_id):
         """
         获取标签
         """
         access_token = self._check_access_token()
-        resp = requests.get(url='https://qyapi.weixin.qq.com/cgi-bin/tag/get',
-                            params={'access_token': access_token, 'tagid': tag_id})
-        return resp.json()
+        return requests.get(url='https://qyapi.weixin.qq.com/cgi-bin/tag/get',
+                            params={'access_token': access_token, 'tagid': tag_id}).json()
+
 
     def add_tag_users(self, **kwargs):
         """
@@ -641,10 +619,8 @@ class WechatEnterprise(OfficialWechat):
            "partylist": [4]
         }
         """
-        access_token = self._check_access_token()
-        resp = requests.post(
-            url='https://qyapi.weixin.qq.com/cgi-bin/tag/addtagusers?access_token={}'.format(access_token), **kwargs)
-        return resp.json()
+        return self._post("https://qyapi.weixin.qq.com/cgi-bin/tag/addtagusers", kwargs)
+
 
     def delete_tag_users(self, **kwargs):
         """
@@ -655,18 +631,17 @@ class WechatEnterprise(OfficialWechat):
            "partylist":[2,4]
         }
         """
-        access_token = self._check_access_token()
-        resp = requests.post(
-            url='https://qyapi.weixin.qq.com/cgi-bin/tag/deltagusers?access_token={}'.format(access_token), **kwargs)
-        return resp.json()
+        return self._post("https://qyapi.weixin.qq.com/cgi-bin/tag/deltagusers", kwargs)
+
 
     def get_tag_list(self):
         """
         获取标签列表
         """
         access_token = self._check_access_token()
-        resp = requests.get(url='https://qyapi.weixin.qq.com/cgi-bin/tag/list', params={'access_token': access_token})
-        return resp.json()
+        return requests.get(url='https://qyapi.weixin.qq.com/cgi-bin/tag/list',
+                            params={'access_token': access_token}).json
+
 
     def batch_invite_user(self, **kwargs):
         """
@@ -684,10 +659,8 @@ class WechatEnterprise(OfficialWechat):
             }
         }
         """
-        access_token = self._check_access_token()
-        resp = requests.post(
-            url='https://qyapi.weixin.qq.com/cgi-bin/batch/inviteuser?access_token={}'.format(access_token), **kwargs)
-        return resp.json()
+        return self._post("https://qyapi.weixin.qq.com/cgi-bin/batch/inviteuser", kwargs)
+
 
     def batch_sync_user(self, **kwargs):
         """
@@ -703,10 +676,8 @@ class WechatEnterprise(OfficialWechat):
             }
         }
         """
-        access_token = self._check_access_token()
-        resp = requests.post(
-            url='https://qyapi.weixin.qq.com/cgi-bin/batch/syncuser?access_token={}'.format(access_token), **kwargs)
-        return resp.json()
+        return self._post('https://qyapi.weixin.qq.com/cgi-bin/batch/syncuser', kwargs)
+
 
     def batch_replace_user(self, **kwargs):
         """
@@ -721,10 +692,8 @@ class WechatEnterprise(OfficialWechat):
             }
         }
         """
-        access_token = self._check_access_token()
-        resp = requests.post(
-            url='https://qyapi.weixin.qq.com/cgi-bin/batch/replaceuser?access_token={}'.format(access_token), **kwargs)
-        return resp.json()
+        return self._post('https://qyapi.weixin.qq.com/cgi-bin/batch/replaceuser', kwargs)
+
 
     def batch_replace_party(self, **kwargs):
         """
@@ -739,10 +708,8 @@ class WechatEnterprise(OfficialWechat):
             }
         }
         """
-        access_token = self._check_access_token()
-        resp = requests.post(
-            url='https://qyapi.weixin.qq.com/cgi-bin/batch/replaceparty?access_token={}'.format(access_token), **kwargs)
-        return resp.json()
+        return self._post("https://qyapi.weixin.qq.com/cgi-bin/batch/replaceparty", kwargs)
+
 
     def get_batch_result(self, job_id):
         """
@@ -751,9 +718,9 @@ class WechatEnterprise(OfficialWechat):
         refer: http://qydev.weixin.qq.com/wiki/index.php?title=%E5%BC%82%E6%AD%A5%E4%BB%BB%E5%8A%A1%E6%8E%A5%E5%8F%A3
         """
         access_token = self._check_access_token()
-        resp = requests.get(url='https://qyapi.weixin.qq.com/cgi-bin/batch/getresult',
-                            params={'access_token': access_token, 'jobid': job_id})
-        return resp.json()
+        return requests.get(url='https://qyapi.weixin.qq.com/cgi-bin/batch/getresult',
+                            params={'access_token': access_token, 'jobid': job_id}).json()
+
 
     def convert_2_open_id(self, **kwargs):
         """
@@ -763,30 +730,25 @@ class WechatEnterprise(OfficialWechat):
            "agentid": 1
         }
         """
-        access_token = self._check_access_token()
-        resp = requests.post(
-            url='https://qyapi.weixin.qq.com/cgi-bin/user/convert_to_openid?access_token={}'.format(access_token),
-            **kwargs)
-        return resp.json()
+        return self._post('https://qyapi.weixin.qq.com/cgi-bin/user/convert_to_openid', kwargs)
+
 
     def convert_2_user_id(self, open_id):
         """
         open id 转换 user id 
         """
-        access_token = self._check_access_token()
-        resp = requests.post(
-            url='https://qyapi.weixin.qq.com/cgi-bin/user/convert_to_userid?access_token={}'.format(access_token),
-            params={'openid': open_id})
-        return resp.json()
+        data = {'openid': open_id}
+        return self._post('https://qyapi.weixin.qq.com/cgi-bin/user/convert_to_userid', data)
+
 
     def get_agent(self, agent_id):
         """
         获取企业号应用
         """
         access_token = self._check_access_token()
-        resp = requests.get(url='https://qyapi.weixin.qq.com/cgi-bin/agent/get',
-                            params={'access_token': access_token, 'agentid': agent_id})
-        return resp.json()
+        return requests.get(url='https://qyapi.weixin.qq.com/cgi-bin/agent/get',
+                            params={'access_token': access_token, 'agentid': agent_id}).json()
+
 
     def set_agent(self, **kwargs):
         """
@@ -803,15 +765,11 @@ class WechatEnterprise(OfficialWechat):
            "home_url":"http://www.qq.com"
         }
         """
-        access_token = self._check_access_token()
-        resp = requests.post(url='https://qyapi.weixin.qq.com/cgi-bin/agent/set?access_token={}'.format(access_token),
-                             **kwargs)
-        return resp.json()
+        return self._post('https://qyapi.weixin.qq.com/cgi-bin/agent/set', kwargs)
 
     def get_agent_list(self):
         """
         获取应用概况列表
         """
         access_token = self._check_access_token()
-        resp = requests.get(url='https://qyapi.weixin.qq.com/cgi-bin/agent/list', params={'access_token': access_token})
-        return resp.json()
+        return requests.get(url='https://qyapi.weixin.qq.com/cgi-bin/agent/list', params={'access_token': access_token})
