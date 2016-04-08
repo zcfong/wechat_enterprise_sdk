@@ -36,7 +36,7 @@ class TestCase(unittest.TestCase):
 
     def test_user(self):
         _id = 'zhangsanseess'
-        params = {'userid': _id, 'name': '张三', 'department': [1], 'mobile': '18665075453',
+        params = {'userid': _id, 'name': '张三', 'department': [1], 'mobile': '13800138000',
                   'gender': 1}
         params['email'] = ''
         params['weixinid'] = None

@@ -6,12 +6,11 @@ from .ierror import WXBizMsgCrypt_OK
 
 class OfficialWechat(object):
 
-    def __init__(self, token=None, corpid=None, corpsecret=None, encoding_aes_key=None, access_token=None, access_token_expires_at=None, jsapi_ticket=None):
+    def __init__(self, token=None, corpid=None, corpsecret=None, encoding_aes_key=None, access_token=None, jsapi_ticket=None):
         self.token = token
         self.corpid = corpid
         self.corpsecret = corpsecret
         self.encoding_aes_key = encoding_aes_key
-        self.access_token_expires_at = access_token_expires_at
         self.jsapi_ticket = jsapi_ticket
         self.wxcpt = WXBizMsgCrypt(token, encoding_aes_key, corpid)
 
