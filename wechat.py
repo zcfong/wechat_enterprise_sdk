@@ -32,6 +32,15 @@ class WechatEnterprise(OfficialWechat):
         return requests.get(url="https://qyapi.weixin.qq.com/cgi-bin/gettoken",
                             params={"corpid": self.corpid, 'corpsecret': self.corpsecret}).json()
 
+    def get_user_info(self, code):
+        """
+        根据code 获取用户资料
+        """
+        access_token = self._check_access_token()
+        return requests.get(
+            url='https://qyapi.weixin.qq.com/cgi-bin/user/getuserinfo?access_token={}&code={}'.format(access_token,
+                                                                                                      code)).json()
+
 
     def grant_jsapi_ticket(self):
         """
@@ -207,7 +216,6 @@ class WechatEnterprise(OfficialWechat):
         :param to_tag: 标签ID列表
         :param safe: 是否加密
         """
-        self._check_parse()
         content = self._transcoding(content)
         if escape:
             content = cgi.escape(content)
@@ -226,8 +234,6 @@ class WechatEnterprise(OfficialWechat):
         :param to_tag: 标签ID列表
         :param safe: 是否加密
         """
-        self._check_parse()
-
         data = ImageSend(**kwargs).apply(media_id=media_id)
         return self._post_message(data)
 
@@ -242,8 +248,6 @@ class WechatEnterprise(OfficialWechat):
         :param to_tag: 标签ID列表
         :param safe: 是否加密
         """
-        self._check_parse()
-
         data = VoiceSend(**kwargs).apply(media_id=media_id)
         return self._post_message(data)
 
@@ -260,7 +264,6 @@ class WechatEnterprise(OfficialWechat):
         :param to_tag: 标签ID列表
         :param safe: 是否加密
         """
-        self._check_parse()
         title = self._transcoding(title)
         description = self._transcoding(description)
 
@@ -278,7 +281,6 @@ class WechatEnterprise(OfficialWechat):
         :param to_tag: 标签ID列表
         :param safe: 是否加密
         """
-        self._check_parse()
         data = FileSend(**kwargs).apply(media_id=media_id)
         return self._post_message(data)
 
@@ -566,9 +568,12 @@ class WechatEnterprise(OfficialWechat):
     def invite_user(self, user_id):
         """
         邀请成员关注
+        ---
+        该方法已过期，微信不支持发送邀请信息
         """
-        data = {'userid': user_id}
-        return self._post('https://qyapi.weixin.qq.com/cgi-bin/invite/send', data)
+        # data = {'userid': user_id}
+        # return self._post('https://qyapi.weixin.qq.com/cgi-bin/invite/send', data)
+        pass
 
 
     def create_tag(self, **kwargs):
